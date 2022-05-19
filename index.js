@@ -8,7 +8,7 @@ const bodyParser = require('body-parser');
 
 const config = require('./config.json');
 MongoClient = new MongoDB.MongoClient(encodeURI(config.mongodb) , { useUnifiedTopology: true } );
-
+var ObjectId = MongoDB.ObjectId; 
 
 
 async function GetRandomString(LENGTHTEXT)
@@ -79,6 +79,7 @@ async function main()
         let data = await MongoClient.db("main").collection("account").find({username: body.username.toLowerCase(), password: body.password.toLowerCase()}).toArray()
         if (data.length > 0) {
           let token = await GetRandomToken()
+          await MongoClient.db("main").collection("token").deleteMany({username: body.username})
           MongoClient.db("main").collection("token").insertOne({username: body.username, token: token, expires: Date.now()  + 24*60*60*1000 })
           console.log(`Create Token: ${token} for user ${body.username}`)
           return res.status(200).json({ token : token})
@@ -125,7 +126,7 @@ async function main()
         res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
       }
     })
-    // Some get data
+    // GET MAIN CLASS
     .post("/account", async (req, res) => {
       try {
         let data = req.userData
@@ -147,54 +148,6 @@ async function main()
         for (let i = 0; i < data.length; i++) 
           data[i].id = data[i]._id.toString()
         
-        console.log(data)
-        res.status(200).json(data);
-      }
-      catch (e) {
-        console.error(e)
-        res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
-      }
-    })
-    .post("/loans", async (req, res) => {
-      try {
-        let username = req.userData.username
-        let data = await MongoClient.db("main").collection("loan").find({username: username}).toArray()
-
-        for (let i = 0; i < data.length; i++) 
-          data[i].id = data[i]._id.toString()
-  
-        console.log(data)
-        res.status(200).json(data);
-      }
-      catch (e) {
-        console.error(e)
-        res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
-      }
-    })
-    .post("/debts", async (req, res) => {
-      try {
-        let username = req.userData.username
-        let data = await MongoClient.db("main").collection("debt").find({username: username}).toArray()
-
-        for (let i = 0; i < data.length; i++) 
-          data[i].id = data[i]._id.toString()
-        console.log(data)
-        res.status(200).json(data);
-      }
-      catch (e) {
-        console.error(e)
-        res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
-      }
-    })
-    .post("/transactions", async (req, res) => {
-      try {
-        let username = req.userData.username
-        let walletName = req.body.walletName || ""
-        let data = await MongoClient.db("main").collection("transaction").find({username: username, walletName : walletName }).toArray()
-
-        for (let i = 0; i < data.length; i++) 
-          data[i].id = data[i]._id.toString()
-    
         console.log(data)
         res.status(200).json(data);
       }
@@ -226,17 +179,254 @@ async function main()
       res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
     }
   })
-  
-  .post("/deposit", async (req, res) =>  {
+  .post("/createwallet", async (req, res) =>  {
+    try {
+      let userData = req.userData 
+      let walletName = req.body.walletName
+      let type = req.body.type
+      
+      let checkWallets = await MongoClient.db("main").collection("wallet").find({ username: userData.username, walletName : walletName}).toArray()
+      
+      if (checkWallets.length != 0) 
+        return res.status(200).json({"message": "Tên ví đã tồn tại vui lòng chọn tên khác"})
+
+      await MongoClient.db("main").collection("wallet").insertOne({
+        username: userData.username,
+        walletName: walletName,
+        type: type,
+        balance: 0,
+        createdOn: Date.now()
+      })
+
+      console.log("Create new Wallet: ", req.body)
+      res.status(200).json({"message" : `Ví ${walletName} đã được khởi tạo thành công`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  // In Wallet
+  .post("/wallet/*", async (req, res, next) =>  {
+    try {
+      let userData = req.userData
+      let walletData = await MongoClient.db("main").collection("wallet").find( { _id : ObjectId(req.body.walletId), username : userData.username }).toArray()
+
+      if (walletData.length == 0)
+        return res.status(200).json({ message : "Ví bạn không tồn tại vui lòng thoát ra và thử lại thao tác"})
+
+      console.log("Wallet: ", walletData)
+      req.walletData = walletData[0]
+      next()
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/deposit", async (req, res) => {
     try {
       let username = req.userData.username
-      let data = await MongoClient.db("main").collection("account").find({username: username}).toArray()
-      data = data[0]
-      if (!data)
-        return res.status(200).json({"message" : "Tài khoản không tồn tại"});
+      let walletData = req.walletData
+      let amount = req.body.amount
+      let info = req.body.info
 
+      await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + amount} })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : info, createdOn : Date.now() })
 
-      res.status(200).json({});
+      console.log(`Deposit ${amount} VND with Info "${info}"`)
+      res.status(200).json({message: `Lệnh nạp tiền vào ví ${walletData.walletName} đã được thực hiện`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/withdraw", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletData = req.walletData
+      let amount = req.body.amount
+      let info = req.body.info
+
+      if (amount > walletData.balance)
+      return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh rút`});
+
+      await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance - amount} })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -amount, info : info, createdOn : Date.now() })
+
+      console.log(`Withdraw ${amount} VND with Info "${info}"`)
+      res.status(200).json({message: `Lệnh rút tiền ra ví ${walletData.walletName} đã được thực hiện`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/createloan", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletData = req.walletData
+      let amount = req.body.amount
+      let debtor = req.body.debtor
+      let info = req.body.info
+
+      if (amount > walletData.balance)
+        return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh cho vay`});
+
+      await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance - amount} })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -amount, info : `Khoảng Cho Vay của ${debtor}`, createdOn : Date.now() })
+      await MongoClient.db("main").collection("loan").insertOne( {  username : username, walletName : walletData.walletName, debtor : debtor, amount : amount, info : info, createdOn : Date.now() })
+
+      console.log(`Create Loan ${amount} VND with Info "${info}"`)
+      res.status(200).json({message: `Lệnh cho vay từ ví ${walletData.walletName} đã được thực hiện`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/createdebt", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletData = req.walletData
+      let amount = req.body.amount
+      let lender = req.body.lender
+      let info = req.body.info
+
+      await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + amount} })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : `Khoảng Vay từ ${lender}`, createdOn : Date.now() })
+      await MongoClient.db("main").collection("debt").insertOne( {  username : username, walletName : walletData.walletName, lender : lender, amount : amount, info : info, createdOn : Date.now() })
+
+      console.log(`Create Debt ${amount} VND with Info "${info}"`)
+      res.status(200).json({message: `Lệnh vay cho ví ${walletData.walletName} đã được thực hiện`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/payloan", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletData = req.walletData
+      let loanId = req.body.loanId;
+
+      let loanData = await MongoClient.db("main").collection("loan").find({_id: ObjectId(loanId)}).toArray()
+
+      if (loanData.length == 0)
+        return res.status(200).json({ message: "Khoảng cho vay không tồn tại"})
+
+      loanData = loanData[0]
+
+      if (loanData.username != username || loanData.walletName != walletData.walletName)
+        return res.status(200).json({ message: "Khoảng cho vay không khớp với ví hoặc tài khoản này"})
+      
+      if (loanData.isPaymented)
+        return res.status(200).json({ message: "Khoảng cho vay này đã được thu từ trước"})
+      
+      await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + loanData.amount} })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : loanData.amount, info : `Thu Khoảng Vay từ ${loanData.debtor}`, createdOn : Date.now() })
+      await MongoClient.db("main").collection("loan").updateOne({_id : loanData._id}, {$set: { isPaymented : true, paymentedOn: Date.now()}})
+
+      console.log(`Pay Loan ${loanData.amount} VND with Info "${loanData.info}"`)
+      res.status(200).json({message: `Lệnh thu nợ cho ví ${walletData.walletName} đã được thực hiện`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/paydebt", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletData = req.walletData
+      let debtId = req.body.debtId;
+
+      let debtData = await MongoClient.db("main").collection("debt").find({_id: ObjectId(debtId)}).toArray()
+
+      if (debtData.length == 0)
+        return res.status(200).json({ message: "Khoảng vay không tồn tại"})
+
+      debtData = debtData[0]
+
+      if (debtData.username != username || debtData.walletName != walletData.walletName)
+        return res.status(200).json({ message: "Khoảng vay không khớp với ví hoặc tài khoản này"})
+      
+      if (debtData.isPaymented)
+        return res.status(200).json({ message: "Khoảng vay này đã được trả từ trước"})
+      
+      if (debtData.amount > walletData.balance)
+        return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh trả nợ`});
+
+      await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance - debtData.amount} })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -debtData.amount, info : `Trả Khoảng Vay của ${debtData.lender}`, createdOn : Date.now() })
+      await MongoClient.db("main").collection("debt").updateOne({_id : debtData._id}, {$set: { isPaymented : true, paymentedOn: Date.now()}})
+
+      console.log(`Pay Debt ${debtData.amount} VND with Info "${debtData.info}"`)
+      res.status(200).json({message: `Lệnh trả nợ của ví ${walletData.walletName} đã được thực hiện`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/load", async (req, res) => {
+    try {
+      let data = req.walletData
+      data.id = data._id.toString()
+      console.log(`sync new Data`)
+      res.status(200).json(data);
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/transactions", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletName = req.walletData.walletName
+      let data = await MongoClient.db("main").collection("transaction").find({username: username, walletName : walletName }).toArray()
+
+      for (let i = 0; i < data.length; i++) 
+        data[i].id = data[i]._id.toString()
+  
+      console.log(data)
+      res.status(200).json(data);
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/loans", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletName = req.walletData.walletName
+      let data = await MongoClient.db("main").collection("loan").find({username: username, walletName : walletName}).toArray()
+
+      for (let i = 0; i < data.length; i++) 
+        data[i].id = data[i]._id.toString()
+
+      console.log(data)
+      res.status(200).json(data);
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
+  .post("/wallet/debts", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletName = req.walletData.walletName
+      let data = await MongoClient.db("main").collection("debt").find({username: username, walletName : walletName}).toArray()
+
+      for (let i = 0; i < data.length; i++) 
+        data[i].id = data[i]._id.toString()
+      console.log(data)
+      res.status(200).json(data);
     }
     catch (e) {
       console.error(e)
@@ -255,7 +445,6 @@ async function main()
       res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
     }
   })
-
   .listen(PORT, () => console.info("WebApp" , `Listening on ${ PORT }`))
 
 
