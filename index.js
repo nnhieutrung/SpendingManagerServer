@@ -170,6 +170,8 @@ async function main()
       data.username = data.username.toLowerCase()
       data.password = data.password.toLowerCase()
 
+      delete data.token
+
       console.log("Update Account: ", data )
       await MongoClient.db("main").collection("account").updateOne({username : data.username},{$set: data})   
       res.status(200).json({"message" : "Cập nhật thông tin thành công"});
