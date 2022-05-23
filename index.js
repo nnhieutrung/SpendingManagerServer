@@ -100,7 +100,6 @@ async function main()
 
       let data = await MongoClient.db("main").collection("account").find({username: body.username.toLowerCase()}).toArray()
       if (data.length == 0) {
-        let token = await GetRandomToken()
         MongoClient.db("main").collection("account").insertOne(body)
         console.log(`Create Token: username ${body.username} for person name ${body.fullname}`)
         return res.status(200).json({ message : "Bạn đã tạo tài khoản thành công"})
