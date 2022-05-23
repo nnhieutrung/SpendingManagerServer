@@ -48,6 +48,7 @@ async function main()
   await MongoClient.connect();
   console.log("Database connected");
 
+
   app
     .set('views', path.join(__dirname, 'public'))
     .set('view engine', 'ejs')
@@ -74,14 +75,15 @@ async function main()
     // POST without token
     .post("/login", async (req, res) => {
       try {
-       
-        let body = req.body;
-        let data = await MongoClient.db("main").collection("account").find({username: body.username.toLowerCase(), password: body.password.toLowerCase()}).toArray()
+        let username = (req.body.username || "").trim().toLowerCase();
+        let password = (req.password || "").trim().toLowerCase();
+
+        let data = await MongoClient.db("main").collection("account").find({username: username, password: password}).toArray()
         if (data.length > 0) {
           let token = await GetRandomToken()
-          await MongoClient.db("main").collection("token").deleteMany({username: body.username})
-          MongoClient.db("main").collection("token").insertOne({username: body.username, token: token, expires: Date.now()  + 24*60*60*1000 })
-          console.log(`Create Token: ${token} for user ${body.username}`)
+          await MongoClient.db("main").collection("token").deleteMany({username: username})
+          MongoClient.db("main").collection("token").insertOne({username: username, token: token, expires: Date.now()  + 24*60*60*1000 })
+          console.log(`Create Token: ${token} for user ${username}`)
           return res.status(200).json({ token : token})
         }
 
@@ -94,9 +96,17 @@ async function main()
     })
     .post("/signup" , async (req, res) => {
       let body = req.body;
-      body.username = (body.username || "").toLowerCase();
-      body.password = (body.password || "").toLowerCase();
+      body.username = (body.username || "").trim().toLowerCase();
+      password = (password || "").trim().toLowerCase();
       body.createdOn = Date.now();
+
+      
+      if (!username)
+        return res.status(406).json({ error : "Username không hợp lệ"});
+
+      if (!password)
+        return res.status(406).json({ error : "Password không hợp lệ"});
+    
 
       let data = await MongoClient.db("main").collection("account").find({username: body.username.toLowerCase()}).toArray()
       if (data.length == 0) {
@@ -161,14 +171,13 @@ async function main()
     try {
       let data = req.userData
       delete data._id 
-      
+        
       let body = req.body
 
-      for (let key in body) 
-        data[key] = body[key]
-
-      data.username = data.username.toLowerCase()
-      data.password = data.password.toLowerCase()
+      data.password = (body.password || '').trim().toLowerCase() || data.password
+      data.fullname = body.fullname || data.fullname
+      data.phone = body.phone || data.phone
+      data.address = body.address || data.address
 
       delete data.token
 
@@ -187,6 +196,12 @@ async function main()
       let walletName = req.body.walletName
       let type = req.body.type
       
+      if (!walletName)
+        return res.status(200).json({ message : "Tên ví không hợp lệ"});
+    
+      if (!type)
+        return res.status(200).json({ message : "Loại ví không hợp lệ"});
+    
       let checkWallets = await MongoClient.db("main").collection("wallet").find({ username: userData.username, walletName : walletName}).toArray()
       
       if (checkWallets.length != 0) 
@@ -226,12 +241,48 @@ async function main()
       res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
     }
   })
+  .post("/wallet/edit", async (req, res) => {
+    try {
+      let username = req.userData.username
+      let walletData = req.walletData
+      let new_walletName = req.body.walletName.trim()
+      let new_type = req.body.type.trim()
+
+      if (!new_walletName)
+        return res.status(200).json({ message : "Tên ví bạn nhập không hợp lệ"})
+
+      if (!new_type)
+        return res.status(200).json({ message : "Loại ví bạn nhập không hợp lệ"})
+
+      if (walletData.walletName != new_walletName) {
+        let checkWallet = await MongoClient.db("main").collection("wallet").find( {username : username, walletName : new_walletName}).toArray()
+
+        if (checkWallet.length > 0)
+          return res.status(200).json({ message : "Tên ví đã tồn tại vui lòng chọn tên ví khác"})  
+      }
+
+      walletData.walletName = new_walletName
+      walletData.type = new_type
+
+      await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id} , {$set : walletData})
+
+      console.log(`Edit Wallet Info `, walletData)
+      res.status(200).json({message: `Lệnh nạp tiền vào ví ${walletData.walletName} đã được thực hiện`});
+    }
+    catch (e) {
+      console.error(e)
+      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
+    }
+  })
   .post("/wallet/deposit", async (req, res) => {
     try {
       let username = req.userData.username
       let walletData = req.walletData
-      let amount = req.body.amount
+      let amount = parseInt(req.body.amount)
       let info = req.body.info
+
+      if (amount < 0)
+        return res.status(200).json({ message : "Số tiền không hợp lệ"})
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + amount} })
       await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : info, createdOn : Date.now() })
@@ -248,11 +299,14 @@ async function main()
     try {
       let username = req.userData.username
       let walletData = req.walletData
-      let amount = req.body.amount
+      let amount = parseInt(req.body.amount)
       let info = req.body.info
 
+      if (amount < 0)
+        return res.status(200).json({ message : "Số tiền không hợp lệ"})
+
       if (amount > walletData.balance)
-      return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh rút`});
+        return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh rút`});
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance - amount} })
       await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -amount, info : info, createdOn : Date.now() })
@@ -269,9 +323,13 @@ async function main()
     try {
       let username = req.userData.username
       let walletData = req.walletData
-      let amount = req.body.amount
+      let amount = parseInt(req.body.amount)
       let debtor = req.body.debtor
       let info = req.body.info
+
+      if (amount < 0)
+        return res.status(200).json({ message : "Số tiền không hợp lệ"})
+
 
       if (amount > walletData.balance)
         return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh cho vay`});
@@ -292,9 +350,12 @@ async function main()
     try {
       let username = req.userData.username
       let walletData = req.walletData
-      let amount = req.body.amount
+      let amount = parseInt(req.body.amount)
       let lender = req.body.lender
       let info = req.body.info
+
+      if (amount < 0)
+        return res.status(200).json({ message : "Số tiền không hợp lệ"})
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + amount} })
       await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : `Khoảng Vay từ ${lender}`, createdOn : Date.now() })
