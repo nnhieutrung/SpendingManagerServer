@@ -76,7 +76,7 @@ async function main()
     .post("/login", async (req, res) => {
       try {
         let username = (req.body.username || "").trim().toLowerCase();
-        let password = (req.password || "").trim().toLowerCase();
+        let password = (req.body.password || "").trim().toLowerCase();
 
         let data = await MongoClient.db("main").collection("account").find({username: username, password: password}).toArray()
         if (data.length > 0) {
@@ -97,7 +97,7 @@ async function main()
     .post("/signup" , async (req, res) => {
       let body = req.body;
       body.username = (body.username || "").trim().toLowerCase();
-      password = (password || "").trim().toLowerCase();
+      password = (body.password || "").trim().toLowerCase();
       body.createdOn = Date.now();
 
       
