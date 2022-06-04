@@ -97,18 +97,18 @@ async function main()
     .post("/signup" , async (req, res) => {
       let body = req.body;
       body.username = (body.username || "").trim().toLowerCase();
-      password = (body.password || "").trim().toLowerCase();
+      body.password = (body.password || "").trim().toLowerCase();
       body.createdOn = Date.now();
 
       
-      if (!username)
+      if (!body.username)
         return res.status(406).json({ error : "Username không hợp lệ"});
 
-      if (!password)
+      if (!body.password)
         return res.status(406).json({ error : "Password không hợp lệ"});
     
 
-      let data = await MongoClient.db("main").collection("account").find({username: body.username.toLowerCase()}).toArray()
+      let data = await MongoClient.db("main").collection("account").find({username: body.username}).toArray()
       if (data.length == 0) {
         MongoClient.db("main").collection("account").insertOne(body)
         console.log(`Create Token: username ${body.username} for person name ${body.fullname}`)
