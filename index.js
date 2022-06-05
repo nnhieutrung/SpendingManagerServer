@@ -38,7 +38,9 @@ async function GetUserDataFromToken(token) {
   return checkData[0]
 }
 
-
+function ToTickCSharp(timestamp) {
+  return (timestamp * 10000) + 621355968000000000
+}
 
 
 async function main()
@@ -142,6 +144,7 @@ async function main()
         delete data.password;
         delete data._id;
         console.log("Get Account: ", data)
+        data.createdOn = ToTickCSharp(data.createdOn)
         res.status(200).json(data);
       }
       catch (e) {
@@ -154,8 +157,10 @@ async function main()
         let username = req.userData.username
         let data = await MongoClient.db("main").collection("wallet").find({username: username}).toArray()
 
-        for (let i = 0; i < data.length; i++) 
+        for (let i = 0; i < data.length; i++) {
           data[i].id = data[i]._id.toString()
+          data[i].createdOn = ToTickCSharp(data[i].createdOn)
+        }
         
         console.log(data)
         res.status(200).json(data);
@@ -451,8 +456,11 @@ async function main()
       let walletName = req.walletData.walletName
       let data = await MongoClient.db("main").collection("transaction").find({username: username, walletName : walletName }).toArray()
 
-      for (let i = 0; i < data.length; i++) 
+      for (let i = 0; i < data.length; i++) {
         data[i].id = data[i]._id.toString()
+        data[i].createdOn = ToTickCSharp(data[i].createdOn)
+      }
+
   
       console.log(data)
       res.status(200).json(data);
@@ -468,8 +476,13 @@ async function main()
       let walletName = req.walletData.walletName
       let data = await MongoClient.db("main").collection("loan").find({username: username, walletName : walletName}).toArray()
 
-      for (let i = 0; i < data.length; i++) 
+      for (let i = 0; i < data.length; i++) {
         data[i].id = data[i]._id.toString()
+        data[i].createdOn = ToTickCSharp(data[i].createdOn)
+        if (data[i].paymentedOn)
+          data[i].paymentedOn = ToTickCSharp(data[i].paymentedOn)
+      }
+
 
       console.log(data)
       res.status(200).json(data);
@@ -485,8 +498,13 @@ async function main()
       let walletName = req.walletData.walletName
       let data = await MongoClient.db("main").collection("debt").find({username: username, walletName : walletName}).toArray()
 
-      for (let i = 0; i < data.length; i++) 
+      for (let i = 0; i < data.length; i++) {
         data[i].id = data[i]._id.toString()
+        data[i].createdOn = ToTickCSharp(data[i].createdOn)
+        if (data[i].paymentedOn)
+          data[i].paymentedOn = ToTickCSharp(data[i].paymentedOn)
+      }
+
       console.log(data)
       res.status(200).json(data);
     }
@@ -496,17 +514,7 @@ async function main()
     }
   })
 
-  .post("/template", async (req, res) =>  {
-    try {
-      let username = req.userData.username
 
-      res.status(200).json({});
-    }
-    catch (e) {
-      console.error(e)
-      res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
-    }
-  })
   .listen(PORT, () => console.info("WebApp" , `Listening on ${ PORT }`))
 
 
