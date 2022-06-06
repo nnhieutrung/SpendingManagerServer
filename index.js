@@ -39,7 +39,7 @@ async function GetUserDataFromToken(token) {
 }
 
 function ToTickCSharp(timestamp) {
-  return (timestamp * 10000) + 621355968000000000
+  return ((timestamp  + 7*60*60*1000) * 10000) + 621355968000000000
 }
 
 
