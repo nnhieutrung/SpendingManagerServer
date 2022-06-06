@@ -63,22 +63,12 @@ async function main()
         console.log(e)
       }
     })
-    .get("/login", async (req, res) => {
-      try {
-        console.log("WRONGG")
-        
-      }
-      catch (e) {
-        console.error(e)
-        return res.status(406).json({ error : "Có lỗi phát sinh trên máy chủ. Vui lòng thử lại"});
-      }
-    })
     .use(bodyParser())
     // POST without token
     .post("/login", async (req, res) => {
       try {
         let username = (req.body.username || "").trim().toLowerCase();
-        let password = (req.body.password || "").trim();
+        let password = (req.body.password || "").trim().toLowerCase();
 
         let data = await MongoClient.db("main").collection("account").find({username: username, password: password}).toArray()
         if (data.length > 0) {
@@ -99,7 +89,7 @@ async function main()
     .post("/signup" , async (req, res) => {
       let body = req.body;
       body.username = (body.username || "").trim().toLowerCase();
-      body.password = (body.password || "").trim();
+      body.password = (body.password || "").trim().toLowerCase();
       body.createdOn = Date.now();
 
       
