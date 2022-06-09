@@ -274,12 +274,16 @@ async function main()
       let walletData = req.walletData
       let amount = parseInt(req.body.amount)
       let info = req.body.info
+      let createdOn = Date.now()
+      
+      if (req.body.createdOn) 
+        createdOn = new Date(req.body.createdOn).getTime();
 
       if (amount < 0)
         return res.status(200).json({ message : "Số tiền không hợp lệ"})
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + amount} })
-      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : info, createdOn : Date.now() })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : info, createdOn : createdOn })
 
       console.log(`Deposit ${amount} VND with Info "${info}"`)
       res.status(200).json({message: `Lệnh nạp tiền vào ví ${walletData.walletName} đã được thực hiện`});
@@ -295,6 +299,10 @@ async function main()
       let walletData = req.walletData
       let amount = parseInt(req.body.amount)
       let info = req.body.info
+      let createdOn = Date.now()
+      
+      if (req.body.createdOn) 
+        createdOn = new Date(req.body.createdOn).getTime();
 
       if (amount < 0)
         return res.status(200).json({ message : "Số tiền không hợp lệ"})
@@ -303,7 +311,7 @@ async function main()
         return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh rút`});
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance - amount} })
-      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -amount, info : info, createdOn : Date.now() })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -amount, info : info, createdOn : createdOn })
 
       console.log(`Withdraw ${amount} VND with Info "${info}"`)
       res.status(200).json({message: `Lệnh rút tiền ra ví ${walletData.walletName} đã được thực hiện`});
@@ -320,6 +328,10 @@ async function main()
       let amount = parseInt(req.body.amount)
       let debtor = req.body.debtor
       let info = req.body.info
+      let createdOn = Date.now()
+      
+      if (req.body.createdOn) 
+        createdOn = new Date(req.body.createdOn).getTime();
 
       if (amount < 0)
         return res.status(200).json({ message : "Số tiền không hợp lệ"})
@@ -329,8 +341,8 @@ async function main()
         return res.status(200).json({message: `Số tiền trong ví không đủ để thực hiện lệnh cho vay`});
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance - amount} })
-      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -amount, info : `Khoảng Cho Vay của ${debtor}`, createdOn : Date.now() })
-      await MongoClient.db("main").collection("loan").insertOne( {  username : username, walletName : walletData.walletName, debtor : debtor, amount : amount, info : info, createdOn : Date.now() })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -amount, info : `Khoảng Cho Vay của ${debtor}`, createdOn : createdOn })
+      await MongoClient.db("main").collection("loan").insertOne( {  username : username, walletName : walletData.walletName, debtor : debtor, amount : amount, info : info, createdOn : createdOn })
 
       console.log(`Create Loan ${amount} VND with Info "${info}"`)
       res.status(200).json({message: `Lệnh cho vay từ ví ${walletData.walletName} đã được thực hiện`});
@@ -347,13 +359,17 @@ async function main()
       let amount = parseInt(req.body.amount)
       let lender = req.body.lender
       let info = req.body.info
+      let createdOn = Date.now()
+      
+      if (req.body.createdOn) 
+        createdOn = new Date(req.body.createdOn).getTime();
 
       if (amount < 0)
         return res.status(200).json({ message : "Số tiền không hợp lệ"})
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + amount} })
-      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : `Khoảng Vay từ ${lender}`, createdOn : Date.now() })
-      await MongoClient.db("main").collection("debt").insertOne( {  username : username, walletName : walletData.walletName, lender : lender, amount : amount, info : info, createdOn : Date.now() })
+      await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : amount, info : `Khoảng Vay từ ${lender}`, createdOn : createdOn })
+      await MongoClient.db("main").collection("debt").insertOne( {  username : username, walletName : walletData.walletName, lender : lender, amount : amount, info : info, createdOn : createdOn })
 
       console.log(`Create Debt ${amount} VND with Info "${info}"`)
       res.status(200).json({message: `Lệnh vay cho ví ${walletData.walletName} đã được thực hiện`});
@@ -368,6 +384,10 @@ async function main()
       let username = req.userData.username
       let walletData = req.walletData
       let loanId = req.body.loanId;
+      let paymentedOn = Date.now()
+      
+      if (req.body.paymentedOn) 
+        paymentedOn = new Date(req.body.paymentedOn).getTime();
 
       let loanData = await MongoClient.db("main").collection("loan").find({_id: ObjectId(loanId)}).toArray()
 
@@ -384,7 +404,7 @@ async function main()
       
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance + loanData.amount} })
       await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : loanData.amount, info : `Thu Khoảng Vay từ ${loanData.debtor}`, createdOn : Date.now() })
-      await MongoClient.db("main").collection("loan").updateOne({_id : loanData._id}, {$set: { isPaymented : true, paymentedOn: Date.now()}})
+      await MongoClient.db("main").collection("loan").updateOne({_id : loanData._id}, {$set: { isPaymented : true, paymentedOn: paymentedOn}})
 
       console.log(`Pay Loan ${loanData.amount} VND with Info "${loanData.info}"`)
       res.status(200).json({message: `Lệnh thu nợ cho ví ${walletData.walletName} đã được thực hiện`});
@@ -399,7 +419,11 @@ async function main()
       let username = req.userData.username
       let walletData = req.walletData
       let debtId = req.body.debtId;
-
+      let paymentedOn = Date.now()
+      
+      if (req.body.paymentedOn) 
+        paymentedOn = new Date(req.body.paymentedOn).getTime();
+        
       let debtData = await MongoClient.db("main").collection("debt").find({_id: ObjectId(debtId)}).toArray()
 
       if (debtData.length == 0)
@@ -418,7 +442,7 @@ async function main()
 
       await MongoClient.db("main").collection("wallet").updateOne( { _id : walletData._id}, {$set : { balance : walletData.balance - debtData.amount} })
       await MongoClient.db("main").collection("transaction").insertOne( { username : username, walletName : walletData.walletName, amount : -debtData.amount, info : `Trả Khoảng Vay của ${debtData.lender}`, createdOn : Date.now() })
-      await MongoClient.db("main").collection("debt").updateOne({_id : debtData._id}, {$set: { isPaymented : true, paymentedOn: Date.now()}})
+      await MongoClient.db("main").collection("debt").updateOne({_id : debtData._id}, {$set: { isPaymented : true, paymentedOn: paymentedOn}})
 
       console.log(`Pay Debt ${debtData.amount} VND with Info "${debtData.info}"`)
       res.status(200).json({message: `Lệnh trả nợ của ví ${walletData.walletName} đã được thực hiện`});
@@ -452,6 +476,8 @@ async function main()
       }
 
   
+      data = data.sort(function(a, b){return a.createdOn - b.createdOn});
+
       console.log(data)
       res.status(200).json(data);
     }
@@ -473,6 +499,7 @@ async function main()
           data[i].paymentedOn = ToTickCSharp(data[i].paymentedOn)
       }
 
+      data = data.sort(function(a, b){return a.createdOn - b.createdOn});
 
       console.log(data)
       res.status(200).json(data);
@@ -494,6 +521,8 @@ async function main()
         if (data[i].paymentedOn)
           data[i].paymentedOn = ToTickCSharp(data[i].paymentedOn)
       }
+
+      data = data.sort(function(a, b){return a.createdOn - b.createdOn});
 
       console.log(data)
       res.status(200).json(data);
